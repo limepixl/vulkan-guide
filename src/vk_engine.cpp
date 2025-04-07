@@ -48,6 +48,12 @@ void VulkanEngine::init()
 void VulkanEngine::cleanup()
 {
     if (_isInitialized) {
+        destroySwapchain();
+        vkDestroyDevice(device, nullptr);
+        vkDestroySurfaceKHR(instance, surface, nullptr);
+
+        vkb::destroy_debug_utils_messenger(instance, debugMessenger);
+        vkDestroyInstance(instance, nullptr);
 
         SDL_DestroyWindow(_window);
     }
@@ -146,6 +152,34 @@ void VulkanEngine::initVulkan() {
 }
 
 void VulkanEngine::initSwapchain() {
+    createSwapchain(_windowExtent.width, _windowExtent.height);
+}
+
+void VulkanEngine::createSwapchain(uint32_t width, uint32_t height) {
+    vkb::SwapchainBuilder builder{chosenGPU, device, surface};
+    swapchainImageFormat = VK_FORMAT_B8G8R8A8_UNORM;
+
+    vkb::Swapchain vkbSwapchain = builder
+        .set_desired_format(VkSurfaceFormatKHR{.format = swapchainImageFormat, .colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR})
+        .set_desired_present_mode(VK_PRESENT_MODE_FIFO_RELAXED_KHR)
+        .set_desired_extent(_windowExtent.width, _windowExtent.height)
+        .add_image_usage_flags(VK_IMAGE_USAGE_TRANSFER_DST_BIT) // So we can transfer to from framebuffer
+        .build()
+        .value();
+
+    swapchainExtent = vkbSwapchain.extent;
+    swapchain = vkbSwapchain.swapchain;
+    swapchainImages = vkbSwapchain.get_images().value();
+    swapchainImageViews = vkbSwapchain.get_image_views().value();
+}
+
+void VulkanEngine::destroySwapchain() {
+    // NOTE: destroying the swapchain destroys the images it holds
+    vkDestroySwapchainKHR(device, swapchain, nullptr);
+
+    for (size_t i = 0; i < swapchainImageViews.size(); i++) {
+        vkDestroyImageView(device, swapchainImageViews[i], nullptr);
+    }
 }
 
 void VulkanEngine::initCommands() {

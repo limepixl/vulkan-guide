@@ -11,12 +11,20 @@ public:
 	bool _isInitialized{ false };
 	int _frameNumber {0};
 	bool stop_rendering{ false };
+
 	VkExtent2D _windowExtent{ 1700 , 900 };
 	VkInstance instance;
 	VkDebugUtilsMessengerEXT debugMessenger;
 	VkPhysicalDevice chosenGPU;
 	VkDevice device;
 	VkSurfaceKHR surface;
+
+	VkSwapchainKHR swapchain;
+	VkFormat swapchainImageFormat;
+	VkExtent2D swapchainExtent;
+
+	std::vector<VkImage> swapchainImages;
+	std::vector<VkImageView> swapchainImageViews;
 
 	struct SDL_Window* _window{ nullptr };
 
@@ -36,7 +44,12 @@ public:
 
 private:
 	void initVulkan();
+
 	void initSwapchain();
+	void createSwapchain(uint32_t width, uint32_t height);
+	void destroySwapchain();
+
 	void initCommands();
+
 	void initSyncStructures();
 };
