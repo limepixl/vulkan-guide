@@ -108,6 +108,41 @@ void VulkanEngine::initVulkan() {
     const vkb::Instance vkbInstance = result.value();
     instance = vkbInstance.instance;
     debugMessenger = vkbInstance.debug_messenger;
+
+    SDL_Vulkan_CreateSurface(_window, instance, &surface);
+
+    // Vulkan 1.3 features
+    VkPhysicalDeviceVulkan13Features features13
+    {
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
+        .synchronization2 = VK_TRUE,
+        .dynamicRendering = VK_TRUE
+    };
+
+    // Vulkan 1.2 features
+    VkPhysicalDeviceVulkan12Features features12
+    {
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
+        .descriptorIndexing = VK_TRUE,
+        .bufferDeviceAddress = VK_TRUE
+    };
+
+    // Select physical device that supports all features we want
+    vkb::PhysicalDeviceSelector selector{vkbInstance};
+    vkb::PhysicalDevice vkbPhysicalDevice = selector
+        .set_minimum_version(1, 3)
+        .set_required_features_13(features13)
+        .set_required_features_12(features12)
+        .set_surface(surface)
+        .select()
+        .value();
+
+    // Create logical device from physical device
+    vkb::DeviceBuilder deviceBuilder{vkbPhysicalDevice};
+    vkb::Device vkbDevice = deviceBuilder.build().value();
+
+    device = vkbDevice.device;
+    chosenGPU = vkbPhysicalDevice.physical_device;
 }
 
 void VulkanEngine::initSwapchain() {
