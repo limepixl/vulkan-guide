@@ -12,6 +12,11 @@ public:
 	int _frameNumber {0};
 	bool stop_rendering{ false };
 	VkExtent2D _windowExtent{ 1700 , 900 };
+	VkInstance instance;
+	VkDebugUtilsMessengerEXT debugMessenger;
+	VkPhysicalDevice chosenGPU;
+	VkDevice device;
+	VkSurfaceKHR surface;
 
 	struct SDL_Window* _window{ nullptr };
 
@@ -28,4 +33,10 @@ public:
 
 	//run main loop
 	void run();
+
+private:
+	void initVulkan();
+	void initSwapchain();
+	void initCommands();
+	void initSyncStructures();
 };

@@ -1,4 +1,6 @@
-﻿//> includes
+﻿// ReSharper disable CppMemberFunctionMayBeConst
+
+//> includes
 #include "vk_engine.h"
 
 #include <SDL.h>
@@ -6,6 +8,8 @@
 
 #include <vk_initializers.h>
 #include <vk_types.h>
+
+#include "VkBootstrap.h"
 
 #include <chrono>
 #include <thread>
@@ -31,6 +35,11 @@ void VulkanEngine::init()
         _windowExtent.width,
         _windowExtent.height,
         window_flags);
+
+    initVulkan();
+    initSwapchain();
+    initCommands();
+    initSyncStructures();
 
     // everything went fine
     _isInitialized = true;
@@ -84,4 +93,28 @@ void VulkanEngine::run()
 
         draw();
     }
+}
+
+void VulkanEngine::initVulkan() {
+    // Use VkBootstrap to build the Vulkan instance
+    vkb::InstanceBuilder builder;
+
+    vkb::Result<vkb::Instance> result = builder.set_app_name("VkGuide program")
+        .request_validation_layers()
+        .use_default_debug_messenger()
+        .require_api_version(1, 3, 0)
+        .build();
+
+    const vkb::Instance vkbInstance = result.value();
+    instance = vkbInstance.instance;
+    debugMessenger = vkbInstance.debug_messenger;
+}
+
+void VulkanEngine::initSwapchain() {
+}
+
+void VulkanEngine::initCommands() {
+}
+
+void VulkanEngine::initSyncStructures() {
 }
