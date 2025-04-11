@@ -33,7 +33,7 @@ public:
 	VkExtent2D swapchainExtent;
 
 	VkQueue graphicsQueue;
-	uint32_t graphicsQueueFamily;
+	uint32_t graphicsQueueFamilyIndex;
 
 	std::vector<VkImage> swapchainImages;
 	std::vector<VkImageView> swapchainImageViews;

@@ -53,7 +53,6 @@ void VulkanEngine::cleanup()
     if (_isInitialized) {
         for (uint8_t i = 0; i < FRAME_OVERLAP; i++) {
             FrameData& frame = frames[i];
-            vkFreeCommandBuffers(device, frame.commandPool, 1, &frame.commandBuffer);
             vkDestroyCommandPool(device, frame.commandPool, nullptr);
         }
 
@@ -161,7 +160,7 @@ void VulkanEngine::initVulkan() {
 
     // Find appropriate queue family and create a queue
     graphicsQueue = vkbDevice.get_queue(vkb::QueueType::graphics).value();
-    graphicsQueueFamily = vkbDevice.get_queue_index(vkb::QueueType::graphics).value();
+    graphicsQueueFamilyIndex = vkbDevice.get_queue_index(vkb::QueueType::graphics).value();
 }
 
 void VulkanEngine::initSwapchain() {
@@ -197,20 +196,14 @@ void VulkanEngine::destroySwapchain() {
 
 void VulkanEngine::initCommands() {
     // Create a command pool for buffers submitted to the graphics queue 
-    VkCommandPoolCreateInfo poolCreateInfo{};
-    poolCreateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-    poolCreateInfo.queueFamilyIndex = graphicsQueueFamily;
+    // NOTE: We allow for resetting individual command buffers with the flag.
+    VkCommandPoolCreateInfo poolCreateInfo = vkinit::command_pool_create_info(graphicsQueueFamilyIndex, VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
 
     for (uint8_t i = 0; i < FRAME_OVERLAP; i++) {
         FrameData& frame = frames[i];
         VK_CHECK(vkCreateCommandPool(device, &poolCreateInfo, nullptr, &frame.commandPool));
-
-        VkCommandBufferAllocateInfo allocateInfo{};
-        allocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-        allocateInfo.commandPool = frame.commandPool;
-        allocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-        allocateInfo.commandBufferCount = 1;
-
+        
+        VkCommandBufferAllocateInfo allocateInfo = vkinit::command_buffer_allocate_info(frame.commandPool);
         VK_CHECK(vkAllocateCommandBuffers(device, &allocateInfo, &frame.commandBuffer));
     }
 
