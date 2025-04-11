@@ -3,7 +3,16 @@
 
 #pragma once
 
+#include <cstdint>
 #include <vk_types.h>
+
+struct FrameData
+{
+	VkCommandPool commandPool;
+	VkCommandBuffer commandBuffer;
+};
+
+constexpr uint8_t FRAME_OVERLAP = 2;
 
 class VulkanEngine {
 public:
@@ -23,12 +32,19 @@ public:
 	VkFormat swapchainImageFormat;
 	VkExtent2D swapchainExtent;
 
+	VkQueue graphicsQueue;
+	uint32_t graphicsQueueFamily;
+
 	std::vector<VkImage> swapchainImages;
 	std::vector<VkImageView> swapchainImageViews;
 
 	struct SDL_Window* _window{ nullptr };
 
 	static VulkanEngine& Get();
+
+	FrameData frames[FRAME_OVERLAP];
+
+	FrameData& getCurrentFrame() { return frames[_frameNumber % FRAME_OVERLAP]; }
 
 	//initializes everything in the engine
 	void init();

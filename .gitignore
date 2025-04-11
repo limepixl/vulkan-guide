@@ -6,3 +6,5 @@
 /cmake-build-relwithdebinfo/
 /cmake-build-debug-visual-studio/
 /cmake-build-relwithdebinfo-visual-studio/
+.cache/
+compile_commands.json

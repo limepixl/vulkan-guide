@@ -6,6 +6,8 @@
 #include <SDL.h>
 #include <SDL_vulkan.h>
 
+#include <cstddef>
+#include <cstdint>
 #include <vk_initializers.h>
 #include <vk_types.h>
 
@@ -13,6 +15,7 @@
 
 #include <chrono>
 #include <thread>
+#include <vulkan/vulkan_core.h>
 
 VulkanEngine* loadedEngine = nullptr;
 
@@ -48,6 +51,12 @@ void VulkanEngine::init()
 void VulkanEngine::cleanup()
 {
     if (_isInitialized) {
+        for (uint8_t i = 0; i < FRAME_OVERLAP; i++) {
+            FrameData& frame = frames[i];
+            vkFreeCommandBuffers(device, frame.commandPool, 1, &frame.commandBuffer);
+            vkDestroyCommandPool(device, frame.commandPool, nullptr);
+        }
+
         destroySwapchain();
         vkDestroyDevice(device, nullptr);
         vkDestroySurfaceKHR(instance, surface, nullptr);
@@ -149,6 +158,10 @@ void VulkanEngine::initVulkan() {
 
     device = vkbDevice.device;
     chosenGPU = vkbPhysicalDevice.physical_device;
+
+    // Find appropriate queue family and create a queue
+    graphicsQueue = vkbDevice.get_queue(vkb::QueueType::graphics).value();
+    graphicsQueueFamily = vkbDevice.get_queue_index(vkb::QueueType::graphics).value();
 }
 
 void VulkanEngine::initSwapchain() {
@@ -183,6 +196,24 @@ void VulkanEngine::destroySwapchain() {
 }
 
 void VulkanEngine::initCommands() {
+    // Create a command pool for buffers submitted to the graphics queue 
+    VkCommandPoolCreateInfo poolCreateInfo{};
+    poolCreateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+    poolCreateInfo.queueFamilyIndex = graphicsQueueFamily;
+
+    for (uint8_t i = 0; i < FRAME_OVERLAP; i++) {
+        FrameData& frame = frames[i];
+        VK_CHECK(vkCreateCommandPool(device, &poolCreateInfo, nullptr, &frame.commandPool));
+
+        VkCommandBufferAllocateInfo allocateInfo{};
+        allocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+        allocateInfo.commandPool = frame.commandPool;
+        allocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+        allocateInfo.commandBufferCount = 1;
+
+        VK_CHECK(vkAllocateCommandBuffers(device, &allocateInfo, &frame.commandBuffer));
+    }
+
 }
 
 void VulkanEngine::initSyncStructures() {
