@@ -10,6 +10,9 @@ struct FrameData
 {
 	VkCommandPool commandPool;
 	VkCommandBuffer commandBuffer;
+	VkSemaphore swapchainSemaphore;
+	VkSemaphore renderSemaphore;
+	VkFence renderFence;
 };
 
 constexpr uint8_t FRAME_OVERLAP = 2;
@@ -34,6 +37,8 @@ public:
 
 	VkQueue graphicsQueue;
 	uint32_t graphicsQueueFamilyIndex;
+	VkQueue presentQueue;
+	uint32_t presentQueueFamilyIndex;
 
 	std::vector<VkImage> swapchainImages;
 	std::vector<VkImageView> swapchainImageViews;
