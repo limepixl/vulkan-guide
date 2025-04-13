@@ -103,12 +103,16 @@ void VulkanEngine::draw()
     // Reset the command buffer so we can record commands to it again
     VK_CHECK(vkResetCommandBuffer(commandBuffer, 0));
 
+    // Set the extent in which we will draw
+    renderExtent.width = swapchainExtent.width;
+    renderExtent.height = swapchainExtent.height;
+
     // Begin recording to the command buffer, and specify it as a one-time command buffer
     VkCommandBufferBeginInfo beginInfo = vkinit::command_buffer_begin_info(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
     VK_CHECK(vkBeginCommandBuffer(commandBuffer, &beginInfo));
     {
         // TODO: Replace with more specific image layouts
-        vkutil::transitionImage(commandBuffer, swapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+        vkutil::transitionImage(commandBuffer, renderImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 
         // Set a specific color and range to clear the image
         VkClearColorValue clearColorValue{};
@@ -116,11 +120,19 @@ void VulkanEngine::draw()
         clearColorValue = {{0.0f, 0.0f, flash, 1.0f}};
 
         VkImageSubresourceRange subresourceRange = vkinit::image_subresource_range(VK_IMAGE_ASPECT_COLOR_BIT);
+        vkCmdClearColorImage(commandBuffer, renderImage.image, VK_IMAGE_LAYOUT_GENERAL, &clearColorValue, 1, &subresourceRange);
 
-        vkCmdClearColorImage(commandBuffer, swapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_GENERAL, &clearColorValue, 1, &subresourceRange);
+        // Transition render image to be used as a source for transfer
+        vkutil::transitionImage(commandBuffer, renderImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+
+        // Transition the swapchain image to be a destination for a transfer
+        vkutil::transitionImage(commandBuffer, swapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+
+        // // Copy the rendered image to the swpachain
+        vkutil::copyImageToImage(commandBuffer, renderImage.image, swapchainImages[swapchainImageIndex], renderExtent, swapchainExtent);
 
         // Transition the cleared image into a presentable layout
-        vkutil::transitionImage(commandBuffer, swapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+        vkutil::transitionImage(commandBuffer, swapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
     }
     VK_CHECK(vkEndCommandBuffer(commandBuffer));
 
