@@ -45,6 +45,9 @@ public:
 	std::vector<VkImage> swapchainImages;
 	std::vector<VkImageView> swapchainImageViews;
 
+	VkExtent2D renderExtent;
+	AllocatedImage renderImage;
+
 	struct SDL_Window* _window{ nullptr };
 
 	static VulkanEngine& Get();

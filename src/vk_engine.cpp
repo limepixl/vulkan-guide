@@ -68,6 +68,9 @@ void VulkanEngine::cleanup()
 
         destroySwapchain();
 
+        vkDestroyImageView(device, renderImage.imageView, nullptr);
+        vmaDestroyImage(allocator, renderImage.image, renderImage.imageAllocation);
+
         vmaDestroyAllocator(allocator);
 
         vkDestroyDevice(device, nullptr);
@@ -245,6 +248,31 @@ void VulkanEngine::initVulkan() {
 
 void VulkanEngine::initSwapchain() {
     createSwapchain(_windowExtent.width, _windowExtent.height);
+
+    VkExtent3D renderImageExtent{};
+    renderImageExtent.width = swapchainExtent.width;
+    renderImageExtent.height = swapchainExtent.height;
+    renderImageExtent.depth = 1;
+
+    renderImage.imageExtent = renderImageExtent;
+    renderImage.imageFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
+
+    VkImageUsageFlags imageUsageFlags{};
+    imageUsageFlags |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    imageUsageFlags |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+    imageUsageFlags |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+    // NOTE(stefan): This usage flag indicates compute shader writing and reading
+    imageUsageFlags |= VK_IMAGE_USAGE_STORAGE_BIT;
+
+    // Allocate image
+    VkImageCreateInfo imageCreateInfo = vkinit::image_create_info(renderImage.imageFormat, imageUsageFlags, renderImageExtent);
+    VmaAllocationCreateInfo imageAllocationCreateInfo{};
+    imageAllocationCreateInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
+    imageAllocationCreateInfo.requiredFlags = VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+    VK_CHECK(vmaCreateImage(allocator, &imageCreateInfo, &imageAllocationCreateInfo, &renderImage.image, &renderImage.imageAllocation, nullptr));
+
+    VkImageViewCreateInfo imageViewCreateInfo = vkinit::imageview_create_info(renderImage.imageFormat, renderImage.image, VK_IMAGE_ASPECT_COLOR_BIT);
+    VK_CHECK(vkCreateImageView(device, &imageViewCreateInfo, nullptr, &renderImage.imageView));
 }
 
 void VulkanEngine::createSwapchain(uint32_t width, uint32_t height) {
