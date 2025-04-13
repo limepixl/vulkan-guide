@@ -20,10 +20,12 @@ constexpr uint8_t FRAME_OVERLAP = 2;
 class VulkanEngine {
 public:
 
-	bool _isInitialized{ false };
-	int _frameNumber {0};
-	bool stop_rendering{ false };
+	bool isInitialized{ false };
+	int frameNumber {0};
+	bool stopRendering{ false };
 
+	VmaAllocator allocator;
+	
 	VkExtent2D _windowExtent{ 1700 , 900 };
 	VkInstance instance;
 	VkDebugUtilsMessengerEXT debugMessenger;
@@ -49,7 +51,7 @@ public:
 
 	FrameData frames[FRAME_OVERLAP];
 
-	FrameData& getCurrentFrame() { return frames[_frameNumber % FRAME_OVERLAP]; }
+	FrameData& getCurrentFrame() { return frames[frameNumber % FRAME_OVERLAP]; }
 
 	//initializes everything in the engine
 	void init();

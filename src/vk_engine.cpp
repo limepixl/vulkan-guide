@@ -48,12 +48,12 @@ void VulkanEngine::init()
     initSyncStructures();
 
     // everything went fine
-    _isInitialized = true;
+    isInitialized = true;
 }
 
 void VulkanEngine::cleanup()
 {
-    if (_isInitialized) {
+    if (isInitialized) {
         vkQueueWaitIdle(graphicsQueue);
         vkQueueWaitIdle(presentQueue);
 
@@ -67,6 +67,9 @@ void VulkanEngine::cleanup()
         }
 
         destroySwapchain();
+
+        vmaDestroyAllocator(allocator);
+
         vkDestroyDevice(device, nullptr);
         vkDestroySurfaceKHR(instance, surface, nullptr);
 
@@ -106,7 +109,7 @@ void VulkanEngine::draw()
 
         // Set a specific color and range to clear the image
         VkClearColorValue clearColorValue{};
-        float flash = glm::abs(std::sin(_frameNumber / 120.0f));
+        float flash = glm::abs(std::sin(frameNumber / 120.0f));
         clearColorValue = {{0.0f, 0.0f, flash, 1.0f}};
 
         VkImageSubresourceRange subresourceRange = vkinit::image_subresource_range(VK_IMAGE_ASPECT_COLOR_BIT);
@@ -138,7 +141,7 @@ void VulkanEngine::draw()
     VK_CHECK(vkQueuePresentKHR(presentQueue, &presentInfo));
 
     // Increase frame number
-    _frameNumber++;
+    frameNumber++;
 }
 
 void VulkanEngine::run()
@@ -156,16 +159,16 @@ void VulkanEngine::run()
 
             if (e.type == SDL_WINDOWEVENT) {
                 if (e.window.event == SDL_WINDOWEVENT_MINIMIZED) {
-                    stop_rendering = true;
+                    stopRendering = true;
                 }
                 if (e.window.event == SDL_WINDOWEVENT_RESTORED) {
-                    stop_rendering = false;
+                    stopRendering = false;
                 }
             }
         }
 
         // do not draw if we are minimized
-        if (stop_rendering) {
+        if (stopRendering) {
             // throttle the speed to avoid the endless spinning
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
             continue;
@@ -223,6 +226,15 @@ void VulkanEngine::initVulkan() {
 
     device = vkbDevice.device;
     chosenGPU = vkbPhysicalDevice.physical_device;
+
+    // Initialize VMA allocator
+    VmaAllocatorCreateInfo allocatorCreateInfo{};
+    allocatorCreateInfo.device = device;
+    allocatorCreateInfo.physicalDevice = chosenGPU;
+    allocatorCreateInfo.instance = instance;
+    allocatorCreateInfo.vulkanApiVersion = VK_API_VERSION_1_3;
+
+    VK_CHECK(vmaCreateAllocator(&allocatorCreateInfo, &allocator));
 
     // Find appropriate queue family and create a queue
     graphicsQueue = vkbDevice.get_queue(vkb::QueueType::graphics).value();
