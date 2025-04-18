@@ -98,7 +98,7 @@ void VulkanEngine::cleanup()
 
 void VulkanEngine::draw()
 {
-    FrameData& currentFrame = getCurrentFrame();\
+    FrameData& currentFrame = getCurrentFrame();
 
     // Wait for GPU to finish rendering the current frame
     VK_CHECK(vkWaitForFences(device, 1, &currentFrame.renderFence, VK_TRUE, UINT64_MAX));

@@ -8,12 +8,38 @@ void vkutil::transitionImage(VkCommandBuffer commandBuffer, VkImage image, VkIma
     // TODO: Replace this image barrier with a more specific barrier
     VkImageMemoryBarrier2 imageBarrier{};
     imageBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-    // NOTE(stefan): "all commands" is a bit excessive here, and might be 
-    // inefficient. But for a few number of transitions it should be fine.
-    imageBarrier.srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
-    imageBarrier.srcAccessMask = VK_ACCESS_2_MEMORY_WRITE_BIT;
-    imageBarrier.dstStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
-    imageBarrier.dstAccessMask = VK_ACCESS_2_MEMORY_WRITE_BIT | VK_ACCESS_2_MEMORY_READ_BIT;
+
+    // NOTE(stefan): Assume we're transitioning for compute purposes
+    if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED && newLayout == VK_IMAGE_LAYOUT_GENERAL)
+    {
+        imageBarrier.srcStageMask = VK_PIPELINE_STAGE_2_BLIT_BIT;
+        imageBarrier.srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
+        imageBarrier.dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+        imageBarrier.dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
+    }
+    // NOTE(stefan): Assume we're transitioning from compute to blitting
+    else if (oldLayout == VK_IMAGE_LAYOUT_GENERAL && newLayout == VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL)
+    {
+        imageBarrier.srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+        imageBarrier.srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
+        imageBarrier.dstStageMask = VK_PIPELINE_STAGE_2_BLIT_BIT;
+        imageBarrier.dstAccessMask = VK_ACCESS_2_TRANSFER_READ_BIT;
+    }
+    // NOTE(stefan): Assume we're transitioning the swapchain image before blitting
+    else if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED && newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
+    {
+        imageBarrier.srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
+        imageBarrier.srcAccessMask = 0;
+        imageBarrier.dstStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
+        imageBarrier.dstAccessMask = VK_ACCESS_2_TRANSFER_READ_BIT;
+    }
+    else if (oldLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && newLayout == VK_IMAGE_LAYOUT_PRESENT_SRC_KHR)
+    {
+        imageBarrier.srcStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
+        imageBarrier.srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
+        imageBarrier.dstStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
+        imageBarrier.dstAccessMask = 0;
+    }
 
     imageBarrier.oldLayout = oldLayout;
     imageBarrier.newLayout = newLayout;
