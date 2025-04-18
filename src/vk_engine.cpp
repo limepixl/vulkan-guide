@@ -15,6 +15,7 @@
 #include "VkBootstrap.h"
 #include "glm/common.hpp"
 #include "vk_images.h"
+#include "vk_descriptors.h"
 
 #include <chrono>
 #include <thread>
@@ -46,6 +47,7 @@ void VulkanEngine::init()
     initSwapchain();
     initCommands();
     initSyncStructures();
+    initDescriptors();
 
     // everything went fine
     isInitialized = true;
@@ -65,6 +67,9 @@ void VulkanEngine::cleanup()
             vkDestroySemaphore(device, frame.swapchainSemaphore, nullptr);
             vkDestroyFence(device, frame.renderFence, nullptr);
         }
+
+        descriptorAllocator.destroyPool(device);
+        vkDestroyDescriptorSetLayout(device, renderImageDescriptorSetLayout, nullptr);
 
         destroySwapchain();
 
@@ -343,4 +348,41 @@ void VulkanEngine::initSyncStructures() {
         VK_CHECK(vkCreateSemaphore(device, &semaphoreInfo, nullptr, &frame.renderSemaphore));
         VK_CHECK(vkCreateSemaphore(device, &semaphoreInfo, nullptr, &frame.swapchainSemaphore));
     }
+}
+
+void VulkanEngine::initDescriptors()
+{
+    // We only need a single descriptor of type storage image
+    std::vector<DescriptorAllocator::CountDescriptorsPerType> counts
+    {
+        { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1 }
+    };
+
+    // Question(stefan): Why 10 here?
+    // Initialize descriptor set pool
+    descriptorAllocator.initPool(device, 10, counts);
+
+    // Create a descriptor set layout
+    DescriptorSetLayout layoutBuilder;
+    layoutBuilder.addBinding(0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT);
+    renderImageDescriptorSetLayout = layoutBuilder.build(device, 0);
+
+    // Allocate a descriptor set from the pool
+    renderImageDescriptorSet = descriptorAllocator.allocateSet(device, renderImageDescriptorSetLayout);
+
+    // Describe the image descriptor
+    VkDescriptorImageInfo imageInfo{};
+    imageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+    imageInfo.imageView = renderImage.imageView;
+
+    // Describe the write operation to do in the descriptor set
+    VkWriteDescriptorSet descriptorSetWrite{};
+    descriptorSetWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    descriptorSetWrite.dstSet = renderImageDescriptorSet;
+    descriptorSetWrite.dstBinding = 0;
+    descriptorSetWrite.dstArrayElement = 0;
+    descriptorSetWrite.descriptorCount = 1;
+    descriptorSetWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+    descriptorSetWrite.pImageInfo = &imageInfo;
+    vkUpdateDescriptorSets(device, 1, &descriptorSetWrite, 0, nullptr);
 }

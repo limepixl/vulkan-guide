@@ -1,0 +1,13 @@
+{
+    "files.associations": {
+        "*.ush": "hlsl",
+        "*.axfjson": "json",
+        "bitset": "cpp",
+        "map": "cpp",
+        "set": "cpp",
+        "xhash": "cpp",
+        "xtree": "cpp",
+        "iterator": "cpp",
+        "xmemory": "cpp"
+    }
+}

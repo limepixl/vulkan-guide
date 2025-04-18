@@ -5,6 +5,7 @@
 
 #include <cstdint>
 #include <vk_types.h>
+#include <vk_descriptors.h>
 
 struct FrameData
 {
@@ -48,6 +49,10 @@ public:
 	VkExtent2D renderExtent;
 	AllocatedImage renderImage;
 
+	DescriptorAllocator descriptorAllocator;
+	VkDescriptorSet renderImageDescriptorSet;
+	VkDescriptorSetLayout renderImageDescriptorSetLayout;
+
 	struct SDL_Window* _window{ nullptr };
 
 	static VulkanEngine& Get();
@@ -78,4 +83,6 @@ private:
 	void initCommands();
 
 	void initSyncStructures();
+
+	void initDescriptors();
 };
