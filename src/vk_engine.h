@@ -56,7 +56,7 @@ public:
 	VkPipeline gradientPipeline;
 	VkPipelineLayout gradientPipelineLayout;
 
-	struct SDL_Window* _window{ nullptr };
+	struct SDL_Window* window{ nullptr };
 
 	static VulkanEngine& Get();
 

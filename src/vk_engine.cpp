@@ -36,7 +36,7 @@ void VulkanEngine::init()
 
     SDL_WindowFlags window_flags = (SDL_WindowFlags)(SDL_WINDOW_VULKAN);
 
-    _window = SDL_CreateWindow(
+    window = SDL_CreateWindow(
         "Vulkan Engine",
         SDL_WINDOWPOS_UNDEFINED,
         SDL_WINDOWPOS_UNDEFINED,
@@ -89,7 +89,7 @@ void VulkanEngine::cleanup()
         vkb::destroy_debug_utils_messenger(instance, debugMessenger);
         vkDestroyInstance(instance, nullptr);
 
-        SDL_DestroyWindow(_window);
+        SDL_DestroyWindow(window);
     }
 
     // clear engine pointer
@@ -218,7 +218,7 @@ void VulkanEngine::initVulkan() {
     instance = vkbInstance.instance;
     debugMessenger = vkbInstance.debug_messenger;
 
-    SDL_Vulkan_CreateSurface(_window, instance, &surface);
+    SDL_Vulkan_CreateSurface(window, instance, &surface);
 
     // Vulkan 1.3 features
     VkPhysicalDeviceVulkan13Features features13
