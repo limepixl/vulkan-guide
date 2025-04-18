@@ -16,6 +16,7 @@
 #include "glm/common.hpp"
 #include "vk_images.h"
 #include "vk_descriptors.h"
+#include "vk_pipelines.h"
 
 #include <chrono>
 #include <thread>
@@ -48,6 +49,7 @@ void VulkanEngine::init()
     initCommands();
     initSyncStructures();
     initDescriptors();
+    initPipelines();
 
     // everything went fine
     isInitialized = true;
@@ -67,6 +69,9 @@ void VulkanEngine::cleanup()
             vkDestroySemaphore(device, frame.swapchainSemaphore, nullptr);
             vkDestroyFence(device, frame.renderFence, nullptr);
         }
+
+        vkDestroyPipeline(device, gradientPipeline, nullptr);
+        vkDestroyPipelineLayout(device, gradientPipelineLayout, nullptr);
 
         descriptorAllocator.destroyPool(device);
         vkDestroyDescriptorSetLayout(device, renderImageDescriptorSetLayout, nullptr);
@@ -119,13 +124,14 @@ void VulkanEngine::draw()
         // TODO: Replace with more specific image layouts
         vkutil::transitionImage(commandBuffer, renderImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 
-        // Set a specific color and range to clear the image
-        VkClearColorValue clearColorValue{};
-        float flash = glm::abs(std::sin(frameNumber / 120.0f));
-        clearColorValue = {{0.0f, 0.0f, flash, 1.0f}};
+        // Bind the compute pipeline
+        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, gradientPipeline);
 
-        VkImageSubresourceRange subresourceRange = vkinit::image_subresource_range(VK_IMAGE_ASPECT_COLOR_BIT);
-        vkCmdClearColorImage(commandBuffer, renderImage.image, VK_IMAGE_LAYOUT_GENERAL, &clearColorValue, 1, &subresourceRange);
+        // Bind the descriptor sets to be used by the pipeline
+        vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, gradientPipelineLayout, 0, 1, &renderImageDescriptorSet, 0, nullptr);
+
+        // Execute the compute pipeline dispatch
+        vkCmdDispatch(commandBuffer, glm::ceil(renderExtent.width / 16.0), glm::ceil(renderExtent.height / 16.0), 1);
 
         // Transition render image to be used as a source for transfer
         vkutil::transitionImage(commandBuffer, renderImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
@@ -385,4 +391,38 @@ void VulkanEngine::initDescriptors()
     descriptorSetWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
     descriptorSetWrite.pImageInfo = &imageInfo;
     vkUpdateDescriptorSets(device, 1, &descriptorSetWrite, 0, nullptr);
+}
+
+void VulkanEngine::initPipelines()
+{
+    initBackgroundPipelines();
+}
+
+void VulkanEngine::initBackgroundPipelines()
+{
+    VkShaderModule gradientShaderModule;
+    if (!vkutil::loadShaderModule("../shaders/gradient.comp.spv", device, &gradientShaderModule))
+    {
+        return;
+    }
+
+    VkPipelineLayoutCreateInfo layoutCreateInfo{};
+    layoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    layoutCreateInfo.pSetLayouts = &renderImageDescriptorSetLayout;
+    layoutCreateInfo.setLayoutCount = 1;
+    VK_CHECK(vkCreatePipelineLayout(device, &layoutCreateInfo, nullptr, &gradientPipelineLayout));
+
+    VkPipelineShaderStageCreateInfo stageInfo{};
+    stageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    stageInfo.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+    stageInfo.module = gradientShaderModule;
+    stageInfo.pName = "main";
+
+    VkComputePipelineCreateInfo pipelineCreateInfo{};
+    pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+    pipelineCreateInfo.layout = gradientPipelineLayout;
+    pipelineCreateInfo.stage = stageInfo;
+    VK_CHECK(vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &pipelineCreateInfo, nullptr, &gradientPipeline));
+
+    vkDestroyShaderModule(device, gradientShaderModule, nullptr);
 }

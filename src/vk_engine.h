@@ -53,6 +53,9 @@ public:
 	VkDescriptorSet renderImageDescriptorSet;
 	VkDescriptorSetLayout renderImageDescriptorSetLayout;
 
+	VkPipeline gradientPipeline;
+	VkPipelineLayout gradientPipelineLayout;
+
 	struct SDL_Window* _window{ nullptr };
 
 	static VulkanEngine& Get();
@@ -85,4 +88,7 @@ private:
 	void initSyncStructures();
 
 	void initDescriptors();
+
+	void initPipelines();
+	void initBackgroundPipelines();
 };
