@@ -60,6 +60,9 @@ public:
 	VkCommandPool immCommandPool;
 	VkFence immFence;
 
+	// ImGui
+	VkDescriptorPool imguiPool;
+
 	struct SDL_Window* window{ nullptr };
 
 	static VulkanEngine& Get();
@@ -76,6 +79,8 @@ public:
 
 	//draw loop
 	void draw();
+
+	void drawDearImGui(VkCommandBuffer commandBuffer, VkImageView targetImageView);
 
 	//run main loop
 	void run();
