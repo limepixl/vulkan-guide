@@ -61,6 +61,11 @@ void VulkanEngine::cleanup()
         vkQueueWaitIdle(graphicsQueue);
         vkQueueWaitIdle(presentQueue);
 
+        // Destory immediate mode pool and command buffers
+        vkWaitForFences(device, 1, &immFence, VK_TRUE, UINT64_MAX);
+        vkDestroyCommandPool(device, immCommandPool, nullptr);
+        vkDestroyFence(device, immFence, nullptr);
+
         for (uint8_t i = 0; i < FRAME_OVERLAP; i++) {
             FrameData& frame = frames[i];
             vkDestroyCommandPool(device, frame.commandPool, nullptr);
@@ -338,6 +343,13 @@ void VulkanEngine::initCommands() {
         VK_CHECK(vkAllocateCommandBuffers(device, &allocateInfo, &frame.commandBuffer));
     }
 
+    // Create command pool for immediate mode commands
+    VkCommandPoolCreateInfo immPoolCreateInfo = vkinit::command_pool_create_info(graphicsQueueFamilyIndex, VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
+    VK_CHECK(vkCreateCommandPool(device, &immPoolCreateInfo, nullptr, &immCommandPool));
+
+    // Allocate command buffer for immediate mode commands
+    VkCommandBufferAllocateInfo immAllocateInfo = vkinit::command_buffer_allocate_info(immCommandPool);
+    VK_CHECK(vkAllocateCommandBuffers(device, &immAllocateInfo, &immCommandBuffer));
 }
 
 void VulkanEngine::initSyncStructures() {
@@ -354,6 +366,10 @@ void VulkanEngine::initSyncStructures() {
         VK_CHECK(vkCreateSemaphore(device, &semaphoreInfo, nullptr, &frame.renderSemaphore));
         VK_CHECK(vkCreateSemaphore(device, &semaphoreInfo, nullptr, &frame.swapchainSemaphore));
     }
+
+    // Create immediate mode fence
+    VkFenceCreateInfo immFenceInfo = vkinit::fence_create_info(VK_FENCE_CREATE_SIGNALED_BIT);
+    VK_CHECK(vkCreateFence(device, &immFenceInfo, nullptr, &immFence));
 }
 
 void VulkanEngine::initDescriptors()
@@ -425,4 +441,20 @@ void VulkanEngine::initBackgroundPipelines()
     VK_CHECK(vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &pipelineCreateInfo, nullptr, &gradientPipeline));
 
     vkDestroyShaderModule(device, gradientShaderModule, nullptr);
+}
+
+void VulkanEngine::beginImmediateCommandBuffer()
+{
+    VkCommandBufferBeginInfo beginInfo = vkinit::command_buffer_begin_info(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
+    vkBeginCommandBuffer(immCommandBuffer, &beginInfo);
+}
+
+void VulkanEngine::endImmediateCommandBuffer()
+{
+    vkEndCommandBuffer(immCommandBuffer);
+    vkResetCommandBuffer(immCommandBuffer, 0);
+}
+
+void VulkanEngine::initDearImGui()
+{
 }

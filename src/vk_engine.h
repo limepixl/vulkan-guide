@@ -56,6 +56,10 @@ public:
 	VkPipeline gradientPipeline;
 	VkPipelineLayout gradientPipelineLayout;
 
+	VkCommandBuffer immCommandBuffer;
+	VkCommandPool immCommandPool;
+	VkFence immFence;
+
 	struct SDL_Window* window{ nullptr };
 
 	static VulkanEngine& Get();
@@ -91,4 +95,9 @@ private:
 
 	void initPipelines();
 	void initBackgroundPipelines();
+
+	void beginImmediateCommandBuffer();
+	void endImmediateCommandBuffer();
+
+	void initDearImGui();
 };
