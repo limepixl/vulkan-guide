@@ -17,9 +17,13 @@
 #include "vk_images.h"
 #include "vk_descriptors.h"
 #include "vk_pipelines.h"
+
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wnontrivial-memcall"
 #include "imgui.h"
 #include "imgui_impl_vulkan.h"
 #include "imgui_impl_sdl2.h"
+#pragma clang diagnostic pop
 
 #include <chrono>
 #include <thread>
