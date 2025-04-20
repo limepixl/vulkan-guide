@@ -24,6 +24,16 @@ struct ComputePushConstants
 	glm::vec4 data4;
 };
 
+struct ComputeEffect
+{
+	const char* name = nullptr;
+	VkPipeline pipeline;
+	VkPipelineLayout pipelineLayout;
+
+	bool hasPushConstants = false;
+	ComputePushConstants constants;
+};
+
 constexpr uint8_t FRAME_OVERLAP = 2;
 constexpr bool USE_IMGUI = true;
 
@@ -62,8 +72,8 @@ public:
 	VkDescriptorSet renderImageDescriptorSet;
 	VkDescriptorSetLayout renderImageDescriptorSetLayout;
 
-	VkPipeline gradientPipeline;
-	VkPipelineLayout gradientPipelineLayout;
+	std::vector<ComputeEffect> computeEffects;
+	uint8_t currentComputeEffectIndex = 0;
 
 	VkCommandBuffer immCommandBuffer;
 	VkCommandPool immCommandPool;

@@ -90,8 +90,11 @@ void VulkanEngine::cleanup()
             vkDestroyFence(device, frame.renderFence, nullptr);
         }
 
-        vkDestroyPipeline(device, gradientPipeline, nullptr);
-        vkDestroyPipelineLayout(device, gradientPipelineLayout, nullptr);
+        for (uint8_t i = 0; i < computeEffects.size(); i++) {
+            ComputeEffect& effect = computeEffects[i];
+            vkDestroyPipeline(device, effect.pipeline, nullptr);
+            vkDestroyPipelineLayout(device, effect.pipelineLayout, nullptr);
+        }
 
         descriptorAllocator.destroyPool(device);
         vkDestroyDescriptorSetLayout(device, renderImageDescriptorSetLayout, nullptr);
@@ -143,19 +146,24 @@ void VulkanEngine::draw()
     VkCommandBufferBeginInfo beginInfo = vkinit::command_buffer_begin_info(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
     VK_CHECK(vkBeginCommandBuffer(commandBuffer, &beginInfo));
     {
+        ComputeEffect& currentEffect = computeEffects[currentComputeEffectIndex];
+
         vkutil::transitionImage(commandBuffer, renderImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 
         // Bind the compute pipeline
-        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, gradientPipeline);
+        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, currentEffect.pipeline);
 
         // Bind the descriptor sets to be used by the pipeline
-        vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, gradientPipelineLayout, 0, 1, &renderImageDescriptorSet, 0, nullptr);
+        vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, currentEffect.pipelineLayout, 0, 1, &renderImageDescriptorSet, 0, nullptr);
 
-        // Update push constants
-        ComputePushConstants pushConstants{};
-        pushConstants.data1 = glm::vec4(1.0, 0.0, 0.0, 1.0);
-        pushConstants.data2 = glm::vec4(0.0, 1.0, 0.0, 1.0);
-        vkCmdPushConstants(commandBuffer, gradientPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(ComputePushConstants), &pushConstants);
+        if (currentEffect.hasPushConstants)
+        {
+            // Update push constants
+            ComputePushConstants pushConstants{};
+            pushConstants.data1 = glm::vec4(1.0, 0.0, 0.0, 1.0);
+            pushConstants.data2 = glm::vec4(0.0, 1.0, 0.0, 1.0);
+            vkCmdPushConstants(commandBuffer, currentEffect.pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(ComputePushConstants), &pushConstants);
+        }
 
         // Execute the compute pipeline dispatch
         vkCmdDispatch(commandBuffer, glm::ceil(renderExtent.width / 16.0), glm::ceil(renderExtent.height / 16.0), 1);
@@ -477,38 +485,79 @@ void VulkanEngine::initPipelines()
 
 void VulkanEngine::initBackgroundPipelines()
 {
-    VkShaderModule gradientShaderModule;
-    if (!vkutil::loadShaderModule("../shaders/gradient_color.comp.spv", device, &gradientShaderModule))
+    // Normal gradient effect
     {
-        return;
+        ComputeEffect gradientEffect;
+        gradientEffect.name = "Gradient";
+
+        VkShaderModule gradientShaderModule;
+        if (!vkutil::loadShaderModule("../shaders/gradient.comp.spv", device, &gradientShaderModule))
+        {
+            return;
+        }
+
+        VkPipelineLayoutCreateInfo layoutCreateInfo{};
+        layoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+        layoutCreateInfo.pSetLayouts = &renderImageDescriptorSetLayout;
+        layoutCreateInfo.setLayoutCount = 1;
+        VK_CHECK(vkCreatePipelineLayout(device, &layoutCreateInfo, nullptr, &gradientEffect.pipelineLayout));
+
+        VkPipelineShaderStageCreateInfo stageInfo{};
+        stageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+        stageInfo.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+        stageInfo.module = gradientShaderModule;
+        stageInfo.pName = "main";
+
+        VkComputePipelineCreateInfo pipelineCreateInfo{};
+        pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+        pipelineCreateInfo.layout = gradientEffect.pipelineLayout;
+        pipelineCreateInfo.stage = stageInfo;
+        VK_CHECK(vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &pipelineCreateInfo, nullptr, &gradientEffect.pipeline));
+
+        vkDestroyShaderModule(device, gradientShaderModule, nullptr);
+        computeEffects.push_back(gradientEffect);
     }
 
-    VkPushConstantRange pushConstantRange{};
-    pushConstantRange.offset = 0;
-    pushConstantRange.size = sizeof(ComputePushConstants);
-    pushConstantRange.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+    {
+        // Colored gradient effect
+        ComputeEffect coloredGradientEffect;
+        coloredGradientEffect.name = "Colored gradient (via push constants)";
+        coloredGradientEffect.hasPushConstants = true;
 
-    VkPipelineLayoutCreateInfo layoutCreateInfo{};
-    layoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    layoutCreateInfo.pSetLayouts = &renderImageDescriptorSetLayout;
-    layoutCreateInfo.setLayoutCount = 1;
-    layoutCreateInfo.pushConstantRangeCount = 1;
-    layoutCreateInfo.pPushConstantRanges = &pushConstantRange;
-    VK_CHECK(vkCreatePipelineLayout(device, &layoutCreateInfo, nullptr, &gradientPipelineLayout));
+        VkShaderModule shaderModule;
+        if (!vkutil::loadShaderModule("../shaders/gradient_color.comp.spv", device, &shaderModule))
+        {
+            return;
+        }
 
-    VkPipelineShaderStageCreateInfo stageInfo{};
-    stageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-    stageInfo.stage = VK_SHADER_STAGE_COMPUTE_BIT;
-    stageInfo.module = gradientShaderModule;
-    stageInfo.pName = "main";
+        VkPushConstantRange pushConstantRange{};
+        pushConstantRange.offset = 0;
+        pushConstantRange.size = sizeof(ComputePushConstants);
+        pushConstantRange.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
 
-    VkComputePipelineCreateInfo pipelineCreateInfo{};
-    pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
-    pipelineCreateInfo.layout = gradientPipelineLayout;
-    pipelineCreateInfo.stage = stageInfo;
-    VK_CHECK(vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &pipelineCreateInfo, nullptr, &gradientPipeline));
+        VkPipelineLayoutCreateInfo layoutCreateInfo{};
+        layoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+        layoutCreateInfo.pSetLayouts = &renderImageDescriptorSetLayout;
+        layoutCreateInfo.setLayoutCount = 1;
+        layoutCreateInfo.pushConstantRangeCount = 1;
+        layoutCreateInfo.pPushConstantRanges = &pushConstantRange;
+        VK_CHECK(vkCreatePipelineLayout(device, &layoutCreateInfo, nullptr, &coloredGradientEffect.pipelineLayout));
 
-    vkDestroyShaderModule(device, gradientShaderModule, nullptr);
+        VkPipelineShaderStageCreateInfo stageInfo{};
+        stageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+        stageInfo.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+        stageInfo.module = shaderModule;
+        stageInfo.pName = "main";
+
+        VkComputePipelineCreateInfo pipelineCreateInfo{};
+        pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+        pipelineCreateInfo.layout = coloredGradientEffect.pipelineLayout;
+        pipelineCreateInfo.stage = stageInfo;
+        VK_CHECK(vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &pipelineCreateInfo, nullptr, &coloredGradientEffect.pipeline));
+
+        vkDestroyShaderModule(device, shaderModule, nullptr);
+        computeEffects.push_back(coloredGradientEffect);
+    }
 }
 
 void VulkanEngine::beginImmediateCommandBuffer()
