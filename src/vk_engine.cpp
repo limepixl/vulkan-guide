@@ -57,7 +57,8 @@ void VulkanEngine::init()
     // everything went fine
     isInitialized = true;
 
-    // initDearImGui();
+    if constexpr (USE_IMGUI)
+        initDearImGui();
 }
 
 void VulkanEngine::cleanup()
@@ -66,8 +67,11 @@ void VulkanEngine::cleanup()
         vkQueueWaitIdle(graphicsQueue);
         vkQueueWaitIdle(presentQueue);
 
-        // ImGui_ImplVulkan_Shutdown();
-        // vkDestroyDescriptorPool(device, imguiPool, nullptr);
+        if constexpr (USE_IMGUI)
+        {
+            ImGui_ImplVulkan_Shutdown();
+            vkDestroyDescriptorPool(device, imguiPool, nullptr);
+        }
 
         // Destory immediate mode pool and command buffers
         vkWaitForFences(device, 1, &immFence, VK_TRUE, UINT64_MAX);
@@ -156,14 +160,22 @@ void VulkanEngine::draw()
         // Copy the rendered image to the swapchain
         vkutil::copyImageToImage(commandBuffer, renderImage.image, swapchainImages[swapchainImageIndex], renderExtent, swapchainExtent);
 
-        // Transition the swapchain image to color attachment layout so we can draw it
-        // vkutil::transitionImage(commandBuffer, swapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+        if constexpr (USE_IMGUI)
+        {
+            // Transition the swapchain image to color attachment layout so we can draw it
+            vkutil::transitionImage(commandBuffer, swapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
-        // Draw imgui into the swapchain image
-        // drawDearImGui(commandBuffer, swapchainImageViews[swapchainImageIndex]);
+            // Draw imgui into the swapchain image
+            drawDearImGui(commandBuffer, swapchainImageViews[swapchainImageIndex]);
 
-        // Transition the drawn image image into a presentable layout
-        vkutil::transitionImage(commandBuffer, swapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+            // Transition the drawn image image into a presentable layout
+            vkutil::transitionImage(commandBuffer, swapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+        }
+        else
+        {
+            // Transition the drawn image image into a presentable layout
+            vkutil::transitionImage(commandBuffer, swapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+        }
     }
     VK_CHECK(vkEndCommandBuffer(commandBuffer));
 
@@ -224,7 +236,8 @@ void VulkanEngine::run()
                 }
             }
 
-            // ImGui_ImplSDL2_ProcessEvent(&e);
+            if constexpr (USE_IMGUI)
+                ImGui_ImplSDL2_ProcessEvent(&e);
         }
 
         // do not draw if we are minimized
@@ -234,15 +247,16 @@ void VulkanEngine::run()
             continue;
         }
 
-        /// ImGui code
-        // ImGui_ImplVulkan_NewFrame();
-        // ImGui_ImplSDL2_NewFrame();
-        // ImGui::NewFrame();
+        if constexpr (USE_IMGUI)
+        {
+            ImGui_ImplVulkan_NewFrame();
+            ImGui_ImplSDL2_NewFrame();
+            ImGui::NewFrame();
 
-        // ImGui::ShowDemoWindow();
+            ImGui::ShowDemoWindow();
 
-        // ImGui::Render();
-        ///
+            ImGui::Render();
+        }
 
         draw();
     }

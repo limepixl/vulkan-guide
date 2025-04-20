@@ -17,6 +17,7 @@ struct FrameData
 };
 
 constexpr uint8_t FRAME_OVERLAP = 2;
+constexpr bool USE_IMGUI = true;
 
 class VulkanEngine {
 public:
