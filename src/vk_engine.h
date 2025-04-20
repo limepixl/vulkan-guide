@@ -73,7 +73,7 @@ public:
 	VkDescriptorSetLayout renderImageDescriptorSetLayout;
 
 	std::vector<ComputeEffect> computeEffects;
-	uint8_t currentComputeEffectIndex = 0;
+	int currentComputeEffectIndex = 0;
 
 	VkCommandBuffer immCommandBuffer;
 	VkCommandPool immCommandPool;

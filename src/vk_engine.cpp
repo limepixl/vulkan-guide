@@ -159,10 +159,7 @@ void VulkanEngine::draw()
         if (currentEffect.hasPushConstants)
         {
             // Update push constants
-            ComputePushConstants pushConstants{};
-            pushConstants.data1 = glm::vec4(1.0, 0.0, 0.0, 1.0);
-            pushConstants.data2 = glm::vec4(0.0, 1.0, 0.0, 1.0);
-            vkCmdPushConstants(commandBuffer, currentEffect.pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(ComputePushConstants), &pushConstants);
+            vkCmdPushConstants(commandBuffer, currentEffect.pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(ComputePushConstants), &currentEffect.constants);
         }
 
         // Execute the compute pipeline dispatch
@@ -270,7 +267,18 @@ void VulkanEngine::run()
             ImGui_ImplSDL2_NewFrame();
             ImGui::NewFrame();
 
-            ImGui::ShowDemoWindow();
+            if (ImGui::Begin("background"))
+            {
+                ComputeEffect& selectedEffect = computeEffects[currentComputeEffectIndex];
+
+                ImGui::Text("Selected effect: %s", selectedEffect.name);
+                ImGui::SliderInt("Effect Index:", &currentComputeEffectIndex, 0, computeEffects.size() - 1);
+                ImGui::InputFloat4("Data1", (float*)&selectedEffect.constants.data1);
+                ImGui::InputFloat4("Data2", (float*)&selectedEffect.constants.data2);
+                ImGui::InputFloat4("Data3", (float*)&selectedEffect.constants.data3);
+                ImGui::InputFloat4("Data4", (float*)&selectedEffect.constants.data4);
+            }
+            ImGui::End();
 
             ImGui::Render();
         }
@@ -485,11 +493,12 @@ void VulkanEngine::initPipelines()
 
 void VulkanEngine::initBackgroundPipelines()
 {
+    ComputeEffect gradientEffect {.name = "Gradient"};
+    ComputeEffect coloredGradientEffect {.name = "Colored gradient (using push constants)", .hasPushConstants = true};
+    ComputeEffect skyEffect {.name = "Sky"};
+
     // Normal gradient effect
     {
-        ComputeEffect gradientEffect;
-        gradientEffect.name = "Gradient";
-
         VkShaderModule gradientShaderModule;
         if (!vkutil::loadShaderModule("../shaders/gradient.comp.spv", device, &gradientShaderModule))
         {
@@ -518,9 +527,8 @@ void VulkanEngine::initBackgroundPipelines()
         computeEffects.push_back(gradientEffect);
     }
 
+    // Colored gradient effect
     {
-        // Colored gradient effect
-        ComputeEffect coloredGradientEffect;
         coloredGradientEffect.name = "Colored gradient (via push constants)";
         coloredGradientEffect.hasPushConstants = true;
 
@@ -557,6 +565,46 @@ void VulkanEngine::initBackgroundPipelines()
 
         vkDestroyShaderModule(device, shaderModule, nullptr);
         computeEffects.push_back(coloredGradientEffect);
+    }
+
+    // Sky effect
+    {
+        skyEffect.name = "Sky";
+        skyEffect.hasPushConstants = true;
+
+        VkShaderModule shaderModule;
+        if (!vkutil::loadShaderModule("../shaders/sky.comp.spv", device, &shaderModule))
+        {
+            return;
+        }
+
+        VkPushConstantRange pushConstantRange{};
+        pushConstantRange.offset = 0;
+        pushConstantRange.size = sizeof(ComputePushConstants);
+        pushConstantRange.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+
+        VkPipelineLayoutCreateInfo layoutCreateInfo{};
+        layoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+        layoutCreateInfo.pSetLayouts = &renderImageDescriptorSetLayout;
+        layoutCreateInfo.setLayoutCount = 1;
+        layoutCreateInfo.pushConstantRangeCount = 1;
+        layoutCreateInfo.pPushConstantRanges = &pushConstantRange;
+        VK_CHECK(vkCreatePipelineLayout(device, &layoutCreateInfo, nullptr, &skyEffect.pipelineLayout));
+
+        VkPipelineShaderStageCreateInfo stageInfo{};
+        stageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+        stageInfo.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+        stageInfo.module = shaderModule;
+        stageInfo.pName = "main";
+
+        VkComputePipelineCreateInfo pipelineCreateInfo{};
+        pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+        pipelineCreateInfo.layout = skyEffect.pipelineLayout;
+        pipelineCreateInfo.stage = stageInfo;
+        VK_CHECK(vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &pipelineCreateInfo, nullptr, &skyEffect.pipeline));
+
+        vkDestroyShaderModule(device, shaderModule, nullptr);
+        computeEffects.push_back(skyEffect);
     }
 }
 
