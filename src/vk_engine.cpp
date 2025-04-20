@@ -57,7 +57,7 @@ void VulkanEngine::init()
     // everything went fine
     isInitialized = true;
 
-    initDearImGui();
+    // initDearImGui();
 }
 
 void VulkanEngine::cleanup()
@@ -66,8 +66,8 @@ void VulkanEngine::cleanup()
         vkQueueWaitIdle(graphicsQueue);
         vkQueueWaitIdle(presentQueue);
 
-        ImGui_ImplVulkan_Shutdown();
-        vkDestroyDescriptorPool(device, imguiPool, nullptr);
+        // ImGui_ImplVulkan_Shutdown();
+        // vkDestroyDescriptorPool(device, imguiPool, nullptr);
 
         // Destory immediate mode pool and command buffers
         vkWaitForFences(device, 1, &immFence, VK_TRUE, UINT64_MAX);
@@ -123,8 +123,10 @@ void VulkanEngine::draw()
 
     VkCommandBuffer& commandBuffer = currentFrame.commandBuffer;
 
-    // Reset the command buffer so we can record commands to it again
-    VK_CHECK(vkResetCommandBuffer(commandBuffer, 0));
+    // Reset the command pool (and thereby the command buffer allocated from that pool)
+    // so we can record commands to that command buffer again.
+    // NOTE(stefan): Best Practices validation layers suggested to reset pool
+    VK_CHECK(vkResetCommandPool(device, currentFrame.commandPool, 0));
 
     // Set the extent in which we will draw
     renderExtent.width = swapchainExtent.width;
@@ -134,7 +136,6 @@ void VulkanEngine::draw()
     VkCommandBufferBeginInfo beginInfo = vkinit::command_buffer_begin_info(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
     VK_CHECK(vkBeginCommandBuffer(commandBuffer, &beginInfo));
     {
-        // TODO: Replace with more specific image layouts
         vkutil::transitionImage(commandBuffer, renderImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 
         // Bind the compute pipeline
@@ -156,19 +157,19 @@ void VulkanEngine::draw()
         vkutil::copyImageToImage(commandBuffer, renderImage.image, swapchainImages[swapchainImageIndex], renderExtent, swapchainExtent);
 
         // Transition the swapchain image to color attachment layout so we can draw it
-        vkutil::transitionImage(commandBuffer, swapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+        // vkutil::transitionImage(commandBuffer, swapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
         // Draw imgui into the swapchain image
-        drawDearImGui(commandBuffer, swapchainImageViews[swapchainImageIndex]);
+        // drawDearImGui(commandBuffer, swapchainImageViews[swapchainImageIndex]);
 
         // Transition the drawn image image into a presentable layout
-        vkutil::transitionImage(commandBuffer, swapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+        vkutil::transitionImage(commandBuffer, swapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
     }
     VK_CHECK(vkEndCommandBuffer(commandBuffer));
 
     VkCommandBufferSubmitInfo commandBufferSubmitInfo = vkinit::command_buffer_submit_info(commandBuffer);
-    VkSemaphoreSubmitInfo signalInfo = vkinit::semaphore_submit_info(VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, currentFrame.renderSemaphore);
-    VkSemaphoreSubmitInfo waitInfo = vkinit::semaphore_submit_info(VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, currentFrame.swapchainSemaphore);
+    VkSemaphoreSubmitInfo signalInfo = vkinit::semaphore_submit_info(VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, currentFrame.renderSemaphore);
+    VkSemaphoreSubmitInfo waitInfo = vkinit::semaphore_submit_info(VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, currentFrame.swapchainSemaphore);
     VkSubmitInfo2 submitInfo = vkinit::submit_info(&commandBufferSubmitInfo, &signalInfo, &waitInfo);
 
     // Submit this command buffer to the graphics queue and begin actual rendering.
@@ -223,7 +224,7 @@ void VulkanEngine::run()
                 }
             }
 
-            ImGui_ImplSDL2_ProcessEvent(&e);
+            // ImGui_ImplSDL2_ProcessEvent(&e);
         }
 
         // do not draw if we are minimized
@@ -234,13 +235,13 @@ void VulkanEngine::run()
         }
 
         /// ImGui code
-        ImGui_ImplVulkan_NewFrame();
-        ImGui_ImplSDL2_NewFrame();
-        ImGui::NewFrame();
+        // ImGui_ImplVulkan_NewFrame();
+        // ImGui_ImplSDL2_NewFrame();
+        // ImGui::NewFrame();
 
-        ImGui::ShowDemoWindow();
+        // ImGui::ShowDemoWindow();
 
-        ImGui::Render();
+        // ImGui::Render();
         ///
 
         draw();
@@ -324,7 +325,6 @@ void VulkanEngine::initSwapchain() {
     renderImage.imageFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
 
     VkImageUsageFlags imageUsageFlags{};
-    imageUsageFlags |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
     imageUsageFlags |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
     imageUsageFlags |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
     // NOTE(stefan): This usage flag indicates compute shader writing and reading
@@ -371,7 +371,7 @@ void VulkanEngine::destroySwapchain() {
 void VulkanEngine::initCommands() {
     // Create a command pool for buffers submitted to the graphics queue 
     // NOTE: We allow for resetting individual command buffers with the flag.
-    VkCommandPoolCreateInfo poolCreateInfo = vkinit::command_pool_create_info(graphicsQueueFamilyIndex, VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
+    VkCommandPoolCreateInfo poolCreateInfo = vkinit::command_pool_create_info(graphicsQueueFamilyIndex, 0);
 
     for (uint8_t i = 0; i < FRAME_OVERLAP; i++) {
         FrameData& frame = frames[i];
@@ -382,7 +382,7 @@ void VulkanEngine::initCommands() {
     }
 
     // Create command pool for immediate mode commands
-    VkCommandPoolCreateInfo immPoolCreateInfo = vkinit::command_pool_create_info(graphicsQueueFamilyIndex, VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
+    VkCommandPoolCreateInfo immPoolCreateInfo = vkinit::command_pool_create_info(graphicsQueueFamilyIndex, 0);
     VK_CHECK(vkCreateCommandPool(device, &immPoolCreateInfo, nullptr, &immCommandPool));
 
     // Allocate command buffer for immediate mode commands
@@ -493,7 +493,7 @@ void VulkanEngine::endImmediateCommandBuffer()
     VK_CHECK(vkResetFences(device, 1, &immFence));
 
     vkEndCommandBuffer(immCommandBuffer);
-    vkResetCommandBuffer(immCommandBuffer, 0);
+    VK_CHECK(vkResetCommandPool(device, immCommandPool, 0));
 }
 
 void VulkanEngine::initDearImGui()
