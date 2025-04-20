@@ -16,6 +16,14 @@ struct FrameData
 	VkFence renderFence;
 };
 
+struct ComputePushConstants
+{
+	glm::vec4 data1;
+	glm::vec4 data2;
+	glm::vec4 data3;
+	glm::vec4 data4;
+};
+
 constexpr uint8_t FRAME_OVERLAP = 2;
 constexpr bool USE_IMGUI = true;
 

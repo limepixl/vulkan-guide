@@ -6,7 +6,6 @@
 #include <SDL.h>
 #include <SDL_vulkan.h>
 
-#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <vk_initializers.h>
@@ -151,6 +150,12 @@ void VulkanEngine::draw()
 
         // Bind the descriptor sets to be used by the pipeline
         vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, gradientPipelineLayout, 0, 1, &renderImageDescriptorSet, 0, nullptr);
+
+        // Update push constants
+        ComputePushConstants pushConstants{};
+        pushConstants.data1 = glm::vec4(1.0, 0.0, 0.0, 1.0);
+        pushConstants.data2 = glm::vec4(0.0, 1.0, 0.0, 1.0);
+        vkCmdPushConstants(commandBuffer, gradientPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(ComputePushConstants), &pushConstants);
 
         // Execute the compute pipeline dispatch
         vkCmdDispatch(commandBuffer, glm::ceil(renderExtent.width / 16.0), glm::ceil(renderExtent.height / 16.0), 1);
@@ -473,15 +478,22 @@ void VulkanEngine::initPipelines()
 void VulkanEngine::initBackgroundPipelines()
 {
     VkShaderModule gradientShaderModule;
-    if (!vkutil::loadShaderModule("../shaders/gradient.comp.spv", device, &gradientShaderModule))
+    if (!vkutil::loadShaderModule("../shaders/gradient_color.comp.spv", device, &gradientShaderModule))
     {
         return;
     }
+
+    VkPushConstantRange pushConstantRange{};
+    pushConstantRange.offset = 0;
+    pushConstantRange.size = sizeof(ComputePushConstants);
+    pushConstantRange.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
 
     VkPipelineLayoutCreateInfo layoutCreateInfo{};
     layoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
     layoutCreateInfo.pSetLayouts = &renderImageDescriptorSetLayout;
     layoutCreateInfo.setLayoutCount = 1;
+    layoutCreateInfo.pushConstantRangeCount = 1;
+    layoutCreateInfo.pPushConstantRanges = &pushConstantRange;
     VK_CHECK(vkCreatePipelineLayout(device, &layoutCreateInfo, nullptr, &gradientPipelineLayout));
 
     VkPipelineShaderStageCreateInfo stageInfo{};
