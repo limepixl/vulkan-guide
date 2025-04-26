@@ -8,6 +8,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
 #include <vk_initializers.h>
 #include <vk_types.h>
 
@@ -90,6 +91,9 @@ void VulkanEngine::cleanup()
             vkDestroyFence(device, frame.renderFence, nullptr);
         }
 
+        vkDestroyPipeline(device, graphicsPipeline, nullptr);
+        vkDestroyPipelineLayout(device, graphicsPipelineLayout, nullptr);
+
         for (uint8_t i = 0; i < computeEffects.size(); i++) {
             ComputeEffect& effect = computeEffects[i];
             vkDestroyPipeline(device, effect.pipeline, nullptr);
@@ -150,23 +154,15 @@ void VulkanEngine::draw()
 
         vkutil::transitionImage(commandBuffer, renderImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 
-        // Bind the compute pipeline
-        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, currentEffect.pipeline);
+        drawBackground(commandBuffer, currentEffect);
 
-        // Bind the descriptor sets to be used by the pipeline
-        vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, currentEffect.pipelineLayout, 0, 1, &renderImageDescriptorSet, 0, nullptr);
+        // Transition render image to be used for drawing geometry
+        vkutil::transitionImage(commandBuffer, renderImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
-        if (currentEffect.hasPushConstants)
-        {
-            // Update push constants
-            vkCmdPushConstants(commandBuffer, currentEffect.pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(ComputePushConstants), &currentEffect.constants);
-        }
-
-        // Execute the compute pipeline dispatch
-        vkCmdDispatch(commandBuffer, glm::ceil(renderExtent.width / 16.0), glm::ceil(renderExtent.height / 16.0), 1);
+        drawGeometry(commandBuffer);
 
         // Transition render image to be used as a source for transfer
-        vkutil::transitionImage(commandBuffer, renderImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+        vkutil::transitionImage(commandBuffer, renderImage.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
 
         // Transition the swapchain image to be a destination for a transfer
         vkutil::transitionImage(commandBuffer, swapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
@@ -214,6 +210,55 @@ void VulkanEngine::draw()
 
     // Increase frame number
     frameNumber++;
+}
+
+void VulkanEngine::drawBackground(VkCommandBuffer commandBuffer, ComputeEffect& currentEffect)
+{
+    // Bind the compute pipeline
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, currentEffect.pipeline);
+
+    // Bind the descriptor sets to be used by the pipeline
+    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, currentEffect.pipelineLayout, 0, 1, &renderImageDescriptorSet, 0, nullptr);
+
+    if (currentEffect.hasPushConstants)
+    {
+        // Update push constants
+        vkCmdPushConstants(commandBuffer, currentEffect.pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(ComputePushConstants), &currentEffect.constants);
+    }
+
+    // Execute the compute pipeline dispatch
+    vkCmdDispatch(commandBuffer, glm::ceil(renderExtent.width / 16.0), glm::ceil(renderExtent.height / 16.0), 1);
+}
+
+void VulkanEngine::drawGeometry(VkCommandBuffer commandBuffer)
+{
+    // NOTE: Using dynamic rendering
+
+    VkRenderingAttachmentInfo colorAttachment = vkinit::attachment_info(renderImage.imageView, nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+    VkRenderingInfo renderInfo = vkinit::rendering_info(renderExtent, &colorAttachment, nullptr);
+    
+    vkCmdBeginRendering(commandBuffer, &renderInfo);
+
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
+
+    // Set the dynamic state we left off from the pipeline
+    VkViewport viewport{};
+    viewport.x = 0;
+    viewport.y = 0;
+    viewport.width = renderExtent.width;
+    viewport.height = renderExtent.height;
+    viewport.minDepth = 0.0f;
+    viewport.maxDepth = 1.0f;
+    vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
+
+    VkRect2D scissor{};
+    scissor.offset = {0, 0};
+    scissor.extent = renderExtent;
+    vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
+
+    vkCmdDraw(commandBuffer, 3, 1, 0, 0);
+
+    vkCmdEndRendering(commandBuffer);
 }
 
 void VulkanEngine::drawDearImGui(VkCommandBuffer commandBuffer, VkImageView targetImageView)
@@ -368,6 +413,7 @@ void VulkanEngine::initSwapchain() {
     imageUsageFlags |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
     // NOTE(stefan): This usage flag indicates compute shader writing and reading
     imageUsageFlags |= VK_IMAGE_USAGE_STORAGE_BIT;
+    imageUsageFlags |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 
     // Allocate image
     VkImageCreateInfo imageCreateInfo = vkinit::image_create_info(renderImage.imageFormat, imageUsageFlags, renderImageExtent);
@@ -489,6 +535,49 @@ void VulkanEngine::initDescriptors()
 void VulkanEngine::initPipelines()
 {
     initBackgroundPipelines();
+    initTrianglePipeline();
+}
+
+void VulkanEngine::initTrianglePipeline()
+{
+    VkShaderModule vertexModule;
+    if (!vkutil::loadShaderModule("../shaders/colored_triangle.vert.spv", device, &vertexModule))
+    {
+        printf("Failed to load vertex shader!\n");
+        return;
+    }
+
+    VkShaderModule fragmentModule;
+    if (!vkutil::loadShaderModule("../shaders/colored_triangle.frag.spv", device, &fragmentModule))
+    {
+        printf("Failed to load fragment shader!\n");
+        return;
+    }
+
+    // Create pipeline layout
+    VkPipelineLayoutCreateInfo pipelineLayoutInfo = vkinit::pipeline_layout_create_info();
+    VK_CHECK(vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &graphicsPipelineLayout));
+
+    // Initialize pipeline state
+    vkutil::PipelineState state{};
+    vkutil::clearPipelineState(state);
+    state.pipelineLayout = graphicsPipelineLayout;
+    
+    vkutil::setPipelineShaders(state, vertexModule, fragmentModule);
+    vkutil::setInputTopology(state, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP);
+    vkutil::setPolygonMode(state, VK_POLYGON_MODE_FILL);
+    vkutil::setCullMode(state, VK_CULL_MODE_BACK_BIT, VK_FRONT_FACE_CLOCKWISE);
+    vkutil::setMultisamplingNone(state);
+    vkutil::disableBlending(state);
+    vkutil::disableDepthDesting(state);
+
+    vkutil::setColorAttachmentFormat(state, renderImage.imageFormat);
+    vkutil::setDepthFormat(state, VK_FORMAT_UNDEFINED);
+
+    graphicsPipeline = vkutil::buildPipeline(state, device);
+
+    vkDestroyShaderModule(device, vertexModule, nullptr);
+    vkDestroyShaderModule(device, fragmentModule, nullptr);
 }
 
 void VulkanEngine::initBackgroundPipelines()

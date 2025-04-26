@@ -24,6 +24,14 @@ void vkutil::transitionImage(VkCommandBuffer commandBuffer, VkImage image, VkIma
         imageBarrier.dstStageMask = VK_PIPELINE_STAGE_2_BLIT_BIT;
         imageBarrier.dstAccessMask = VK_ACCESS_2_TRANSFER_READ_BIT;
     }
+    // NOTE(stefan): Assume we're transitioning from compute to graphics
+    else if (oldLayout == VK_IMAGE_LAYOUT_GENERAL && newLayout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
+    {
+        imageBarrier.srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+        imageBarrier.srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
+        imageBarrier.dstStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
+        imageBarrier.dstAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
+    }
     // NOTE(stefan): Assume we're transitioning the swapchain image before blitting
     else if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED && newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
     {
@@ -38,6 +46,13 @@ void vkutil::transitionImage(VkCommandBuffer commandBuffer, VkImage image, VkIma
         imageBarrier.srcAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
         imageBarrier.dstStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
         imageBarrier.dstAccessMask = 0;
+    }
+    else if (oldLayout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL && newLayout == VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL)
+    {
+        imageBarrier.srcStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
+        imageBarrier.srcAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
+        imageBarrier.dstStageMask = VK_PIPELINE_STAGE_2_BLIT_BIT;
+        imageBarrier.dstAccessMask = VK_ACCESS_2_TRANSFER_READ_BIT;
     }
     else if (oldLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && newLayout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
     {

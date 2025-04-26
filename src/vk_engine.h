@@ -75,6 +75,9 @@ public:
 	std::vector<ComputeEffect> computeEffects;
 	int currentComputeEffectIndex = 0;
 
+	VkPipelineLayout graphicsPipelineLayout;
+	VkPipeline graphicsPipeline;
+
 	VkCommandBuffer immCommandBuffer;
 	VkCommandPool immCommandPool;
 	VkFence immFence;
@@ -98,6 +101,8 @@ public:
 
 	//draw loop
 	void draw();
+	void drawBackground(VkCommandBuffer commandBuffer, ComputeEffect& currentEffect);
+	void drawGeometry(VkCommandBuffer commandBuffer);
 
 	void drawDearImGui(VkCommandBuffer commandBuffer, VkImageView targetImageView);
 
@@ -119,6 +124,7 @@ private:
 
 	void initPipelines();
 	void initBackgroundPipelines();
+	void initTrianglePipeline();
 
 	void beginImmediateCommandBuffer();
 	void endImmediateCommandBuffer();
