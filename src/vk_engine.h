@@ -35,7 +35,7 @@ struct ComputeEffect
 };
 
 constexpr uint8_t FRAME_OVERLAP = 2;
-constexpr bool USE_IMGUI = true;
+constexpr bool USE_IMGUI = false;
 
 class VulkanEngine {
 public:
@@ -77,6 +77,7 @@ public:
 
 	VkPipelineLayout graphicsPipelineLayout;
 	VkPipeline graphicsPipeline;
+	GPUMeshBuffers rectangle;
 
 	VkCommandBuffer immCommandBuffer;
 	VkCommandPool immCommandPool;
@@ -125,9 +126,16 @@ private:
 	void initPipelines();
 	void initBackgroundPipelines();
 	void initTrianglePipeline();
+	void initMeshPipeline();
+
+	void initDefaultMeshData();
 
 	void beginImmediateCommandBuffer();
 	void endImmediateCommandBuffer();
 
 	void initDearImGui();
+
+	AllocatedBuffer createBuffer(size_t allocSize, VkBufferUsageFlags usageFlags, VmaAllocationCreateFlags allocationFlags, VmaMemoryUsage memoryUsage);
+	void destroyBuffer(AllocatedBuffer& buffer);
+	GPUMeshBuffers uploadMesh(std::vector<uint32_t> indices, std::vector<Vertex> vertices);
 };
